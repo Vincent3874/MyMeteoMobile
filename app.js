@@ -1,7 +1,7 @@
 // ============================================
 // MyMeteo Mobile - Application JavaScript
 // Architecture technique identique à MyMeteo
-// Architecture logicielle adaptée au mobile
+// Version corrigée : 100% async/await, pas de mélange Promise/then
 // ============================================
 
 // ------------------------------------------------------------------
@@ -12,7 +12,7 @@ const CFG = {
     key: "sb_publishable_F4IH5ndz17UAPgHC7ihdRg_LiZikjIb",
     table: "MyMeteoData",
     indicatorsTable: "DailyIndicators",
-    pageSize: 1000
+    page: 1000
 };
 
 // Colonnes à récupérer
@@ -27,6 +27,7 @@ const IND_COLS = encodeURIComponent(
 // État global
 let state = {
     currentPeriod: 'today',
+    selectedYear: null,
     latestData: null,
     periodData: null,
     availableYears: [],
@@ -72,106 +73,85 @@ function hideLoading() {
 function showError(message) {
     document.getElementById('errorMessage').textContent = message;
     document.getElementById('errorModal').hidden = false;
-    console.error('Erreur:', message);
+    console.error('MyMeteo Mobile Error:', message);
 }
 
 // ------------------------------------------------------------------
-// Appels API Supabase
+// Options de fetch communes
+// ------------------------------------------------------------------
+const fetchOpts = {
+    headers: {
+        "apikey": CFG.key,
+        "Authorization": "Bearer " + CFG.key
+    }
+};
+
+// ------------------------------------------------------------------
+// Fonction fetch avec gestion d'erreur centralisée
+// ------------------------------------------------------------------
+async function fetchJSON(url, context) {
+    try {
+        const response = await fetch(url, fetchOpts);
+        if (!response.ok) {
+            const text = await response.text().catch(() => '');
+            throw new Error("HTTP " + response.status + " - " + text.slice(0, 180));
+        }
+        return await response.json();
+    } catch (err) {
+        console.error("[" + context + "] Erreur:", err.message);
+        throw err;
+    }
+}
+
+// ------------------------------------------------------------------
+// Appels API Supabase - 100% async/await (pas de .then())
 // ------------------------------------------------------------------
 
 async function fetchLatestRow() {
     const url = CFG.url + "/rest/v1/" + CFG.table +
         "?select=" + COLS + '&order="DateTime".desc&limit=1';
     
-    try {
-        const response = await fetch(url, {
-            headers: {
-                "apikey": CFG.key,
-                "Authorization": "Bearer " + CFG.key
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-        }
-        
-        const rows = await response.json();
-        return rows.length ? rows[0] : null;
-    } catch (err) {
-        console.error('Erreur fetchLatestRow:', err);
-        throw err;
-    }
+    const rows = await fetchJSON(url, 'fetchLatestRow');
+    return rows.length ? rows[0] : null;
 }
 
+// Récupération paginée - BOUCLE while au lieu de récursion
 async function fetchRows(from, to = null) {
     let all = [];
     let offset = 0;
     
-    const url = CFG.url + "/rest/v1/" + CFG.table +
-        "?select=" + COLS +
-        '&"DateTime"=gte.' + from +
-        (to ? '&"DateTime"=lt.' + to : "") +
-        '&order="DateTime".asc&limit=' + CFG.pageSize;
-    
-    try {
-        const response = await fetch(url + "&offset=" + offset, {
-            headers: {
-                "apikey": CFG.key,
-                "Authorization": "Bearer " + CFG.key
-            }
-        });
+    while (true) {
+        const u = CFG.url + "/rest/v1/" + CFG.table +
+            "?select=" + COLS +
+            '&"DateTime"=gte.' + from +
+            (to ? '&"DateTime"=lt.' + to : "") +
+            '&order="DateTime".asc&limit=' + CFG.page + "&offset=" + offset;
         
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-        }
-        
-        const rows = await response.json();
+        const rows = await fetchJSON(u, 'fetchRows');
         all = all.concat(rows);
         
-        if (rows.length < CFG.pageSize) return all;
-        
-        offset += CFG.pageSize;
-        // Pour le mobile, on limite à une seule page pour l'instant
-        return all;
-    } catch (err) {
-        console.error('Erreur fetchRows:', err);
-        throw err;
+        if (rows.length < CFG.page) return all;
+        offset += CFG.page;
     }
 }
 
+// Indicateurs journaliers - BOUCLE while
 async function fetchIndicators(from, to = null) {
     let all = [];
     let offset = 0;
     
-    const url = CFG.url + "/rest/v1/" + CFG.indicatorsTable +
-        "?select=" + IND_COLS +
-        (from ? "&date=gte." + from : "") +
-        (to ? "&date=lt." + to : "") +
-        "&order=date.asc&limit=" + CFG.pageSize;
-    
-    try {
-        const response = await fetch(url + "&offset=" + offset, {
-            headers: {
-                "apikey": CFG.key,
-                "Authorization": "Bearer " + CFG.key
-            }
-        });
+    while (true) {
+        const u = CFG.url + "/rest/v1/" + CFG.indicatorsTable +
+            "?select=" + IND_COLS +
+            (from ? "&date=gte." + from : "") +
+            (to ? "&date=lt." + to : "") +
+            "&order=date.asc&limit=" + CFG.page + "&offset=" + offset;
         
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-        }
-        
-        const rows = await response.json();
+        const rows = await fetchJSON(u, 'fetchIndicators');
         all = all.concat(rows);
         
-        if (rows.length < CFG.pageSize) return all;
-        
-        offset += CFG.pageSize;
-        // Pour le mobile, on limite à une seule page
-        return all;
-    } catch (err) {
-        console.error('Erreur fetchIndicators:', err);
-        throw err;
+        if (rows.length < CFG.page) return all;
+        offset += CFG.page;
     }
 }
 
@@ -180,24 +160,8 @@ async function fetchOneDateTime(order) {
         "?select=" + encodeURIComponent('"DateTime"') +
         '&order="DateTime".' + order + "&limit=1";
     
-    try {
-        const response = await fetch(url, {
-            headers: {
-                "apikey": CFG.key,
-                "Authorization": "Bearer " + CFG.key
-            }
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Erreur HTTP ${response.status}`);
-        }
-        
-        const rows = await response.json();
-        return rows.length ? rows[0]["DateTime"] : null;
-    } catch (err) {
-        console.error('Erreur fetchOneDateTime:', err);
-        throw err;
-    }
+    const rows = await fetchJSON(url, 'fetchOneDateTime');
+    return rows.length ? rows[0]["DateTime"] : null;
 }
 
 // ------------------------------------------------------------------
@@ -286,7 +250,6 @@ function processIndicatorsData(rows) {
 function processRawDataForToday(rows) {
     if (!rows || rows.length === 0) return null;
     
-    // Calculer les agrégats pour aujourd'hui
     let tempMin = Infinity;
     let tempMax = -Infinity;
     let tempSum = 0;
@@ -316,7 +279,7 @@ function processRawDataForToday(rows) {
         
         if (!isNaN(rain)) {
             rainTotal += rain;
-            lastRain = rain; // Dernière valeur de pluie horaire
+            lastRain = rain;
         }
         
         if (!isNaN(press)) {
@@ -426,13 +389,11 @@ function renderIndicatorsTable(data, period) {
         return;
     }
     
-    // Tri par date décroissante
     data.sort((a, b) => b.date.localeCompare(a.date));
     
     let rows = '';
     
     if (period === 'today') {
-        // Pour aujourd'hui, on affiche les valeurs du jour
         const d = data[0];
         rows = `
             <div class="table-row">
@@ -477,7 +438,6 @@ function renderIndicatorsTable(data, period) {
             </div>
         `;
     } else {
-        // Pour les autres périodes, on affiche les données par jour
         data.forEach(d => {
             rows += `
                 <div class="table-row">
@@ -542,7 +502,6 @@ function renderYears(years) {
         return;
     }
     
-    // Filtrer pour exclure 2022
     const filteredYears = years.filter(y => y !== 2022);
     
     container.innerHTML = filteredYears.map(year => `
@@ -559,7 +518,6 @@ function renderYears(years) {
 function selectPeriod(period) {
     state.currentPeriod = period;
     
-    // Mettre à jour les boutons
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.classList.remove('active');
         if (btn.dataset.period === period) {
@@ -567,11 +525,9 @@ function selectPeriod(period) {
         }
     });
     
-    // Masquer/afficher les sections
     document.getElementById('dataSection').hidden = false;
     document.getElementById('yearsSection').hidden = true;
     
-    // Mettre à jour le titre
     const titles = {
         today: 'Aujourd\'hui',
         yesterday: 'Hier',
@@ -582,7 +538,6 @@ function selectPeriod(period) {
     document.getElementById('periodTitle').textContent = titles[period] || period;
     document.getElementById('periodBadge').textContent = period === 'today' ? 'Données brutes' : 'Indicateurs journaliers';
     
-    // Charger les données
     loadData();
 }
 
@@ -590,7 +545,6 @@ function selectYear(year) {
     state.currentPeriod = 'year';
     state.selectedYear = year;
     
-    // Mettre à jour les boutons
     document.querySelectorAll('.year-btn').forEach(btn => {
         btn.classList.remove('active');
         if (parseInt(btn.dataset.year) === year) {
@@ -598,15 +552,12 @@ function selectYear(year) {
         }
     });
     
-    // Masquer/afficher les sections
     document.getElementById('dataSection').hidden = false;
     document.getElementById('yearsSection').hidden = true;
     
-    // Mettre à jour le titre
     document.getElementById('periodTitle').textContent = `Année ${year}`;
     document.getElementById('periodBadge').textContent = 'Indicateurs annuels';
     
-    // Charger les données
     loadData();
 }
 
@@ -659,18 +610,21 @@ async function loadAvailableYears() {
 async function loadPeriodData() {
     const period = state.currentPeriod;
     
-    // Si on a sélectionné une année
     if (period === 'year' && state.selectedYear) {
         const range = getYearRange(state.selectedYear);
-        const rows = await fetchIndicators(range.from, range.to);
-        const data = processIndicatorsData(rows);
-        const summary = aggregateIndicatorsData(data);
-        
-        state.periodData = data;
-        state.periodSummary = summary;
-        
-        renderIndicatorsTable(data, period);
-        renderSummary(summary, period);
+        try {
+            const rows = await fetchIndicators(range.from, range.to);
+            const data = processIndicatorsData(rows);
+            const summary = aggregateIndicatorsData(data);
+            
+            state.periodData = data;
+            state.periodSummary = summary;
+            
+            renderIndicatorsTable(data, period);
+            renderSummary(summary, period);
+        } catch (err) {
+            showError('Impossible de charger les données pour cette période : ' + err.message);
+        }
         return;
     }
     
@@ -678,7 +632,6 @@ async function loadPeriodData() {
     
     try {
         if (range.source === 'raw') {
-            // Aujourd'hui : données brutes
             const rows = await fetchRows(range.from, range.to);
             const data = processRawDataForToday(rows);
             
@@ -690,7 +643,6 @@ async function loadPeriodData() {
                 state.periodSummary = null;
             }
         } else {
-            // Autres périodes : indicateurs journaliers
             const rows = await fetchIndicators(range.from, range.to);
             const data = processIndicatorsData(rows);
             const summary = aggregateIndicatorsData(data);
@@ -713,14 +665,12 @@ async function loadData() {
     showLoading();
     
     try {
-        // Charger les données selon la période
         if (state.currentPeriod === 'years') {
             showYears();
         } else {
             await loadPeriodData();
         }
         
-        // Mettre à jour la date de dernière mise à jour
         const now = new Date();
         document.getElementById('lastUpdate').textContent = `Mise à jour : ${frDateTime(now.toISOString())}`;
         
@@ -737,17 +687,12 @@ async function loadData() {
 
 async function init() {
     try {
-        // Charger les années disponibles
         await loadAvailableYears();
-        
-        // Charger le dernier relevé
         await loadLatest();
         
-        // Charger les données de la période par défaut (aujourd'hui)
         state.currentPeriod = 'today';
         await loadData();
         
-        // Sélectionner le bouton aujourd'hui
         document.querySelector('.period-btn[data-period="today"]').classList.add('active');
         
     } catch (err) {
@@ -755,7 +700,6 @@ async function init() {
     }
 }
 
-// Gestion du bouton années dans la barre de période
 function handlePeriodButtonClick(period) {
     if (period === 'years') {
         showYears();
@@ -764,9 +708,7 @@ function handlePeriodButtonClick(period) {
     }
 }
 
-// Attacher les gestionnaires d'événements
 function attachEventListeners() {
-    // Boutons de période
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const period = btn.dataset.period;
@@ -774,7 +716,6 @@ function attachEventListeners() {
         });
     });
     
-    // Bouton de rafraîchissement
     document.getElementById('refreshBtn').addEventListener('click', async () => {
         await loadLatest();
         await loadData();
@@ -787,16 +728,15 @@ window.addEventListener('DOMContentLoaded', () => {
     init();
 });
 
-// Gestion du clavier pour les raccourcis
+// Gestion du clavier
 window.addEventListener('keydown', (e) => {
-    // Rafraîchir avec F5 ou Ctrl+R
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
         e.preventDefault();
         loadData();
     }
 });
 
-// Optimisation pour mobile : toucher pour rafraîchir
+// Gestion mobile
 let touchStartY = 0;
 
 window.addEventListener('touchstart', (e) => {
@@ -807,7 +747,6 @@ window.addEventListener('touchend', (e) => {
     const touchEndY = e.changedTouches[0].clientY;
     const diff = touchStartY - touchEndY;
     
-    // Swipe down pour rafraîchir
     if (diff < -50 && window.scrollY === 0) {
         loadData();
     }
