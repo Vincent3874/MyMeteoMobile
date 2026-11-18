@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>MyMeteo Mobile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <span class="logo-icon">📡</span>
+                    <span class="logo-text">MyMeteo</span>
+                </div>
+                <div class="header-actions">
+                    <button class="icon-btn" id="refreshBtn" onclick="loadData()">
+                        <span class="icon">🔄</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dernier relevé -->
+            <section class="section latest-section" id="latestSection">
+                <div class="section-header">
+                    <h2>Dernier Relevé</h2>
+                    <span class="section-badge">En temps réel</span>
+                </div>
+                <div class="latest-grid" id="latestData">
+                    <!-- Les données seront insérées ici par JavaScript -->
+                </div>
+            </section>
+
+            <!-- Boutons de période -->
+            <section class="section period-section">
+                <h2>Périodes</h2>
+                <div class="period-buttons">
+                    <button class="period-btn active" data-period="today" onclick="selectPeriod('today')">
+                        <span class="btn-icon">📅</span>
+                        <span class="btn-label">Aujourd'hui</span>
+                    </button>
+                    <button class="period-btn" data-period="yesterday" onclick="selectPeriod('yesterday')">
+                        <span class="btn-icon">📅</span>
+                        <span class="btn-label">Hier</span>
+                    </button>
+                    <button class="period-btn" data-period="7days" onclick="selectPeriod('7days')">
+                        <span class="btn-icon">📊</span>
+                        <span class="btn-label">7 jours</span>
+                    </button>
+                    <button class="period-btn" data-period="30days" onclick="selectPeriod('30days')">
+                        <span class="btn-icon">📈</span>
+                        <span class="btn-label">30 jours</span>
+                    </button>
+                    <button class="period-btn" data-period="years" onclick="selectPeriod('years')">
+                        <span class="btn-icon">🗓️</span>
+                        <span class="btn-label">Années</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Section des données de période -->
+            <section class="section data-section" id="dataSection">
+                <div class="section-header">
+                    <h2 id="periodTitle">Aujourd'hui</h2>
+                    <span class="section-badge" id="periodBadge">Données brutes</span>
+                </div>
+                
+                <!-- Tableau des indicateurs -->
+                <div class="table-card" id="indicatorsTable">
+                    <div class="table-header">
+                        <span class="col-label">Métrique</span>
+                        <span class="col-label">Valeur</span>
+                        <span class="col-label">Date</span>
+                    </div>
+                    <div class="table-body" id="indicatorsTableBody">
+                        <!-- Les lignes seront insérées ici -->
+                    </div>
+                </div>
+
+                <!-- Résumé -->
+                <div class="summary-card" id="summaryCard">
+                    <div class="summary-grid" id="summaryGrid">
+                        <!-- Résumé des données -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section des années (cachée par défaut) -->
+            <section class="section years-section" id="yearsSection" hidden>
+                <div class="section-header">
+                    <h2>Sélectionnez une année</h2>
+                </div>
+                <div class="years-grid" id="yearsGrid">
+                    <!-- Les boutons d'années seront insérés ici -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <span>Données : Supabase</span>
+                <span class="separator">|</span>
+                <span id="lastUpdate">Mise à jour : —</span>
+            </div>
+        </footer>
+
+        <!-- Modal de chargement -->
+        <div class="modal" id="loadingModal" hidden>
+            <div class="modal-content">
+                <div class="spinner"></div>
+                <p class="loading-text">Chargement...</p>
+            </div>
+        </div>
+
+        <!-- Modal d'erreur -->
+        <div class="modal" id="errorModal" hidden>
+            <div class="modal-content error">
+                <div class="error-icon">⚠️</div>
+                <h3>Erreur</h3>
+                <p id="errorMessage"></p>
+                <button class="btn-primary" onclick="document.getElementById('errorModal').hidden = true">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
