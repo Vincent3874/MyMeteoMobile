@@ -1,7 +1,7 @@
 // ============================================
 // MyMeteo Mobile - Application JavaScript
 // Architecture technique identique à MyMeteo
-// Version corrigée : 100% async/await, pas de mélange Promise/then
+// Version finale : Gestion correcte de la modal d'erreur
 // ============================================
 
 // ------------------------------------------------------------------
@@ -33,6 +33,9 @@ let state = {
     availableYears: [],
     isLoading: false
 };
+
+// Timer pour fermer automatiquement la modal après 5 secondes
+let errorModalTimer = null;
 
 // ------------------------------------------------------------------
 // Utilitaires
@@ -70,10 +73,49 @@ function hideLoading() {
     state.isLoading = false;
 }
 
+// ------------------------------------------------------------------
+// Gestion de la modal d'erreur - CORRIGÉE
+// ------------------------------------------------------------------
+function clearErrorModalTimer() {
+    if (errorModalTimer) {
+        clearTimeout(errorModalTimer);
+        errorModalTimer = null;
+    }
+}
+
 function showError(message) {
+    // Ne pas afficher si message vide
+    if (!message || message.trim() === '') {
+        document.getElementById('errorModal').hidden = true;
+        return;
+    }
+    
+    // Effacer le timer précédent
+    clearErrorModalTimer();
+    
+    // Masquer puis afficher pour éviter les superpositions
+    const errorModal = document.getElementById('errorModal');
+    errorModal.hidden = true;
+    
+    // Mettre à jour le message
     document.getElementById('errorMessage').textContent = message;
-    document.getElementById('errorModal').hidden = false;
+    
+    // Afficher la modal
+    errorModal.hidden = false;
+    
+    // Logger dans la console
     console.error('MyMeteo Mobile Error:', message);
+    
+    // Timer pour fermer automatiquement après 5 secondes
+    errorModalTimer = setTimeout(() => {
+        errorModal.hidden = true;
+    }, 5000);
+}
+
+// Fonction pour fermer manuellement la modal
+function hideErrorModal() {
+    clearErrorModalTimer();
+    document.getElementById('errorModal').hidden = true;
 }
 
 // ------------------------------------------------------------------
@@ -115,7 +157,7 @@ async function fetchLatestRow() {
     return rows.length ? rows[0] : null;
 }
 
-// Récupération paginée - BOUCLE while au lieu de récursion
+// Récupération paginée - BOUCLE while
 async function fetchRows(from, to = null) {
     let all = [];
     let offset = 0;
@@ -379,6 +421,9 @@ function renderLatestData(data) {
             <span class="value">${item.value}</span>
         </div>
     `).join('');
+    
+    // Fermer la modal d'erreur après un rendu réussi
+    hideErrorModal();
 }
 
 function renderIndicatorsTable(data, period) {
@@ -465,6 +510,9 @@ function renderIndicatorsTable(data, period) {
     }
     
     container.innerHTML = rows;
+    
+    // Fermer la modal d'erreur après un rendu réussi
+    hideErrorModal();
 }
 
 function renderSummary(summary, period) {
@@ -492,6 +540,9 @@ function renderSummary(summary, period) {
             <span class="value">${item.value}</span>
         </div>
     `).join('');
+    
+    // Fermer la modal d'erreur après un rendu réussi
+    hideErrorModal();
 }
 
 function renderYears(years) {
@@ -517,6 +568,9 @@ function renderYears(years) {
 
 function selectPeriod(period) {
     state.currentPeriod = period;
+    
+    // Masquer la modal d'erreur au changement de période
+    hideErrorModal();
     
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -545,6 +599,9 @@ function selectYear(year) {
     state.currentPeriod = 'year';
     state.selectedYear = year;
     
+    // Masquer la modal d'erreur
+    hideErrorModal();
+    
     document.querySelectorAll('.year-btn').forEach(btn => {
         btn.classList.remove('active');
         if (parseInt(btn.dataset.year) === year) {
@@ -562,6 +619,9 @@ function selectYear(year) {
 }
 
 function showYears() {
+    // Masquer la modal d'erreur
+    hideErrorModal();
+    
     document.getElementById('dataSection').hidden = true;
     document.getElementById('yearsSection').hidden = false;
 }
@@ -571,6 +631,7 @@ function showYears() {
 // ------------------------------------------------------------------
 
 async function loadLatest() {
+    hideErrorModal();
     try {
         const row = await fetchLatestRow();
         state.latestData = processLatestData(row);
@@ -581,6 +642,7 @@ async function loadLatest() {
 }
 
 async function loadAvailableYears() {
+    hideErrorModal();
     try {
         const [minDate, maxDate] = await Promise.all([
             fetchOneDateTime('asc'),
@@ -604,10 +666,12 @@ async function loadAvailableYears() {
     } catch (err) {
         console.error('Erreur loadAvailableYears:', err);
         state.availableYears = [];
+        showError('Impossible de déterminer les années disponibles : ' + err.message);
     }
 }
 
 async function loadPeriodData() {
+    hideErrorModal();
     const period = state.currentPeriod;
     
     if (period === 'year' && state.selectedYear) {
@@ -663,6 +727,7 @@ async function loadData() {
     if (state.isLoading) return;
     
     showLoading();
+    hideErrorModal(); // Masquer la modal au début du chargement
     
     try {
         if (state.currentPeriod === 'years') {
@@ -686,6 +751,9 @@ async function loadData() {
 // ------------------------------------------------------------------
 
 async function init() {
+    // Masquer la modal d'erreur dès le démarrage
+    hideErrorModal();
+    
     try {
         await loadAvailableYears();
         await loadLatest();
@@ -716,7 +784,16 @@ function attachEventListeners() {
         });
     });
     
+    // Bouton OK de la modal d'erreur
+    const errorOkBtn = document.querySelector('#errorModal .btn-primary');
+    if (errorOkBtn) {
+        errorOkBtn.onclick = function() {
+            hideErrorModal();
+        };
+    }
+    
     document.getElementById('refreshBtn').addEventListener('click', async () => {
+        hideErrorModal();
         await loadLatest();
         await loadData();
     });
@@ -732,7 +809,12 @@ window.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('keydown', (e) => {
     if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
         e.preventDefault();
+        hideErrorModal();
         loadData();
+    }
+    // Fermer la modal avec Escape
+    if (e.key === 'Escape') {
+        hideErrorModal();
     }
 });
 
@@ -748,6 +830,7 @@ window.addEventListener('touchend', (e) => {
     const diff = touchStartY - touchEndY;
     
     if (diff < -50 && window.scrollY === 0) {
+        hideErrorModal();
         loadData();
     }
 });
@@ -755,3 +838,4 @@ window.addEventListener('touchend', (e) => {
 // Exposer les fonctions pour les boutons inline
 window.selectPeriod = selectPeriod;
 window.selectYear = selectYear;
+window.hideErrorModal = hideErrorModal;

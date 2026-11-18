@@ -125,14 +125,15 @@
         </div>
 
         <!-- Modal d'erreur -->
-        <div class="modal" id="errorModal" hidden>
+        <div class="modal" id="errorModal" hidden style="display: none !important;">
             <div class="modal-content error">
                 <div class="error-icon">⚠️</div>
                 <h3>Erreur</h3>
                 <p id="errorMessage"></p>
-                <button class="btn-primary" onclick="document.getElementById('errorModal').hidden = true">OK</button>
+                <button class="btn-primary" onclick="window.hideErrorModal ? hideErrorModal() : (document.getElementById('errorModal').hidden = true, document.getElementById('errorModal').style.display = 'none')">OK</button>
             </div>
         </div>
+        <script>document.getElementById('errorModal').style.display = 'none';</script>
     </div>
 
     <script src="app.js"></script>
