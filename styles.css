@@ -265,6 +265,15 @@ body {
     margin-left: 2px;
 }
 
+/* Message when no data is available */
+.no-data {
+    color: var(--text-muted);
+    font-size: var(--font-size-base);
+    text-align: center;
+    padding: var(--spacing-md);
+    grid-column: 1 / -1;
+}
+
 /* ============================================
    Period Buttons
    ============================================ */
@@ -502,6 +511,10 @@ body {
     z-index: 1000;
     padding: var(--spacing-lg);
     animation: fadeIn 0.2s ease forwards;
+}
+
+.modal[hidden] {
+    display: none !important;
 }
 
 .modal-content {

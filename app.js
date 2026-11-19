@@ -182,18 +182,33 @@ async function fetchIndicators(from, to = null) {
     let all = [];
     let offset = 0;
     
+    console.log(`[fetchIndicators] Recherche de données de ${from} à ${to}`);
+    
     while (true) {
-        const u = CFG.url + "/rest/v1/" + CFG.indicatorsTable +
+        // Utiliser simplement le nom de la table sans schéma
+        // Supabase gère le schéma public par défaut
+        const u = CFG.url + "/rest/v1/DailyIndicators" +
             "?select=" + IND_COLS +
             (from ? "&date=gte." + from : "") +
             (to ? "&date=lt." + to : "") +
             "&order=date.asc&limit=" + CFG.page + "&offset=" + offset;
         
-        const rows = await fetchJSON(u, 'fetchIndicators');
-        all = all.concat(rows);
+        console.log(`[fetchIndicators] URL: ${u}`);
         
-        if (rows.length < CFG.page) return all;
-        offset += CFG.page;
+        try {
+            const rows = await fetchJSON(u, 'fetchIndicators');
+            console.log(`[fetchIndicators] ${rows.length} lignes récupérées (offset: ${offset})`);
+            all = all.concat(rows);
+            
+            if (rows.length < CFG.page) {
+                console.log(`[fetchIndicators] Fin de la pagination. Total: ${all.length} lignes`);
+                return all;
+            }
+            offset += CFG.page;
+        } catch (err) {
+            console.error(`[fetchIndicators] Erreur: ${err.message}`);
+            throw err;
+        }
     }
 }
 
@@ -204,6 +219,18 @@ async function fetchOneDateTime(order) {
     
     const rows = await fetchJSON(url, 'fetchOneDateTime');
     return rows.length ? rows[0]["DateTime"] : null;
+}
+
+// Récupère la dernière date disponible dans DailyIndicators
+async function getLastIndicatorDate() {
+    const url = CFG.url + "/rest/v1/DailyIndicators?select=date&order=date.desc&limit=1";
+    try {
+        const rows = await fetchJSON(url, 'getLastIndicatorDate');
+        return rows.length ? rows[0].date : null;
+    } catch (err) {
+        console.error("[getLastIndicatorDate] Erreur:", err.message);
+        return null;
+    }
 }
 
 // ------------------------------------------------------------------
@@ -226,13 +253,21 @@ function getDateMinusDays(days) {
     return isoDay(d);
 }
 
+// Soustraire des jours à partir d'une date ISO
+function getDateMinusDaysFrom(dateIso, days) {
+    const d = new Date(dateIso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() - days);
+    return isoDay(d);
+}
+
 function nextDay(iso) {
     const d = new Date(iso + "T00:00:00Z");
     d.setUTCDate(d.getUTCDate() + 1);
     return d.toISOString().slice(0, 10);
 }
 
-function getPeriodRange(period) {
+// Version asynchrone qui utilise la dernière date disponible pour les périodes multi-jours
+async function getPeriodRange(period) {
     const today = getToday();
     
     switch (period) {
@@ -240,10 +275,25 @@ function getPeriodRange(period) {
             return { from: today, to: nextDay(today), source: 'raw' };
         case 'yesterday':
             return { from: getYesterday(), to: today, source: 'indicators' };
-        case '7days':
-            return { from: getDateMinusDays(6), to: today, source: 'indicators' };
-        case '30days':
-            return { from: getDateMinusDays(29), to: today, source: 'indicators' };
+        case '7days': {
+            // Obtenir la dernière date disponible dans DailyIndicators
+            const lastDate = await getLastIndicatorDate();
+            if (lastDate) {
+                // Calculer à partir de la dernière date disponible
+                const fromDate = getDateMinusDaysFrom(lastDate, 6); // 7 jours = 6 jours en arrière
+                return { from: fromDate, to: nextDay(lastDate), source: 'indicators' };
+            }
+            // Fallback si aucune date disponible
+            return { from: getDateMinusDays(7), to: today, source: 'indicators' };
+        }
+        case '30days': {
+            const lastDate = await getLastIndicatorDate();
+            if (lastDate) {
+                const fromDate = getDateMinusDaysFrom(lastDate, 29); // 30 jours = 29 jours en arrière
+                return { from: fromDate, to: nextDay(lastDate), source: 'indicators' };
+            }
+            return { from: getDateMinusDays(30), to: today, source: 'indicators' };
+        }
         default:
             return { from: today, to: nextDay(today), source: 'raw' };
     }
@@ -274,7 +324,7 @@ function processLatestData(row) {
 function processIndicatorsData(rows) {
     if (!rows || rows.length === 0) return [];
     
-    return rows.map(row => ({
+    const result = rows.map(row => ({
         date: row.date,
         tempMin: row.temp_min,
         tempAvg: row.temp_avg,
@@ -287,6 +337,9 @@ function processIndicatorsData(rows) {
         uvIndexMax: row.uv_index_max,
         reliability: row.reliability
     }));
+    
+    console.log(`[processIndicatorsData] ${result.length} lignes traitées. Première:`, result[0]);
+    return result;
 }
 
 function processRawDataForToday(rows) {
@@ -369,17 +422,18 @@ function aggregateIndicatorsData(rows) {
     let uvMax = -Infinity;
     
     for (const row of rows) {
-        if (row.temp_min !== null) tempMin = Math.min(tempMin, row.temp_min);
-        if (row.temp_max !== null) tempMax = Math.max(tempMax, row.temp_max);
-        if (row.temp_avg !== null) {
-            tempSum += row.temp_avg;
+        // Utiliser les noms de propriétés avec majuscules (comme retournés par processIndicatorsData)
+        if (row.tempMin !== null && row.tempMin !== undefined && !isNaN(row.tempMin)) tempMin = Math.min(tempMin, row.tempMin);
+        if (row.tempMax !== null && row.tempMax !== undefined && !isNaN(row.tempMax)) tempMax = Math.max(tempMax, row.tempMax);
+        if (row.tempAvg !== null && row.tempAvg !== undefined && !isNaN(row.tempAvg)) {
+            tempSum += row.tempAvg;
             tempCount++;
         }
-        if (row.rain_total !== null) rainTotal += row.rain_total;
-        if (row.pressure_min !== null) pressureMin = Math.min(pressureMin, row.pressure_min);
-        if (row.pressure_max !== null) pressureMax = Math.max(pressureMax, row.pressure_max);
-        if (row.wind_gust_max !== null) windGustMax = Math.max(windGustMax, row.wind_gust_max);
-        if (row.uv_index_max !== null) uvMax = Math.max(uvMax, row.uv_index_max);
+        if (row.rainTotal !== null && row.rainTotal !== undefined && !isNaN(row.rainTotal)) rainTotal += row.rainTotal;
+        if (row.pressureMin !== null && row.pressureMin !== undefined && !isNaN(row.pressureMin)) pressureMin = Math.min(pressureMin, row.pressureMin);
+        if (row.pressureMax !== null && row.pressureMax !== undefined && !isNaN(row.pressureMax)) pressureMax = Math.max(pressureMax, row.pressureMax);
+        if (row.windGustMax !== null && row.windGustMax !== undefined && !isNaN(row.windGustMax)) windGustMax = Math.max(windGustMax, row.windGustMax);
+        if (row.uvIndexMax !== null && row.uvIndexMax !== undefined && !isNaN(row.uvIndexMax)) uvMax = Math.max(uvMax, row.uvIndexMax);
     }
     
     return {
@@ -519,19 +573,28 @@ function renderSummary(summary, period) {
     const container = document.getElementById('summaryGrid');
     
     if (!summary) {
-        container.innerHTML = '<p class="no-data">Aucun résumé disponible</p>';
+        const periodLabels = {
+            today: 'Aujourd\'hui',
+            yesterday: 'Hier',
+            '7days': '7 derniers jours',
+            '30days': '30 derniers jours',
+            years: 'Années'
+        };
+        const label = periodLabels[period] || period;
+        container.innerHTML = `<p class="no-data">Aucune donnée disponible pour ${label}</p>`;
         return;
     }
     
+    // Gestion des valeurs null/undefined dans le summary
     const items = [
-        { label: 'Temp. Min', value: fmt(summary.tempMin, 1) + '°C' },
-        { label: 'Temp. Moy', value: fmt(summary.tempAvg, 1) + '°C' },
-        { label: 'Temp. Max', value: fmt(summary.tempMax, 1) + '°C' },
-        { label: 'Pluie Total', value: fmt(summary.rainTotal, 1) + ' mm' },
-        { label: 'Pression Min', value: fmt(summary.pressureMin, 1) + ' hPa' },
-        { label: 'Pression Max', value: fmt(summary.pressureMax, 1) + ' hPa' },
-        { label: 'Rafale Max', value: fmt(summary.windGustMax, 1) + ' km/h' },
-        { label: 'UV Max', value: fmt(summary.uvIndexMax, 1) }
+        { label: 'Température min', value: summary.tempMin !== null && summary.tempMin !== undefined ? fmt(summary.tempMin, 1) + '°C' : '—' },
+        { label: 'Température max', value: summary.tempMax !== null && summary.tempMax !== undefined ? fmt(summary.tempMax, 1) + '°C' : '—' },
+        { label: 'Température moy', value: summary.tempAvg !== null && summary.tempAvg !== undefined ? fmt(summary.tempAvg, 1) + '°C' : '—' },
+        { label: 'Cumul des précipitations', value: summary.rainTotal !== null && summary.rainTotal !== undefined ? fmt(summary.rainTotal, 1) + ' mm' : '—' },
+        { label: 'Rafale maximum', value: summary.windGustMax !== null && summary.windGustMax !== undefined ? fmt(summary.windGustMax, 1) + ' km/h' : '—' },
+        { label: 'UV Max', value: summary.uvIndexMax !== null && summary.uvIndexMax !== undefined ? fmt(summary.uvIndexMax, 1) : '—' },
+        { label: 'Pression Min', value: summary.pressureMin !== null && summary.pressureMin !== undefined ? fmt(summary.pressureMin, 1) + ' hPa' : '—' },
+        { label: 'Pression Max', value: summary.pressureMax !== null && summary.pressureMax !== undefined ? fmt(summary.pressureMax, 1) + ' hPa' : '—' }
     ];
     
     container.innerHTML = items.map(item => `
@@ -684,7 +747,6 @@ async function loadPeriodData() {
             state.periodData = data;
             state.periodSummary = summary;
             
-            renderIndicatorsTable(data, period);
             renderSummary(summary, period);
         } catch (err) {
             showError('Impossible de charger les données pour cette période : ' + err.message);
@@ -692,7 +754,8 @@ async function loadPeriodData() {
         return;
     }
     
-    const range = getPeriodRange(period);
+    // getPeriodRange est maintenant asynchrone
+    const range = await getPeriodRange(period);
     
     try {
         if (range.source === 'raw') {
@@ -715,7 +778,6 @@ async function loadPeriodData() {
             state.periodSummary = summary;
         }
         
-        renderIndicatorsTable(state.periodData, period);
         renderSummary(state.periodSummary, period);
         
     } catch (err) {
