@@ -33,7 +33,8 @@ let state = {
     availableYears: [],
     isLoading: false,
     periodRowsCount: 0,
-    periodExpectedDays: 0
+    periodExpectedDays: 0,
+    todayReliability: 0
 };
 
 // Timer pour fermer automatiquement la modal après 5 secondes
@@ -243,6 +244,15 @@ function getToday() {
     return isoDay(new Date());
 }
 
+// Date du jour en heure locale (pour la fiabilité)
+function getTodayLocal() {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function getYesterday() {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - 1);
@@ -271,10 +281,12 @@ function nextDay(iso) {
 // Version asynchrone qui utilise la dernière date disponible pour les périodes multi-jours
 async function getPeriodRange(period) {
     const today = getToday();
+    const todayLocal = getTodayLocal();
     
     switch (period) {
         case 'today':
-            return { from: today, to: nextDay(today), source: 'raw' };
+            // Utiliser l'heure locale pour aujourd'hui (minuit local)
+            return { from: todayLocal, to: nextDay(todayLocal), source: 'raw' };
         case 'yesterday':
             return { from: getYesterday(), to: today, source: 'indicators' };
         case '7days': {
@@ -776,14 +788,21 @@ async function loadPeriodData() {
             const rows = await fetchRows(range.from, range.to);
             const data = processRawDataForToday(rows);
             
+            // Calcul de la fiabilité pour aujourd'hui : 1 donnée toutes les 5 min
+            // Utiliser l'heure LOCALE (pas UTC) car on compte depuis minuit local
+            const now = new Date();
+            const elapsedMinutes = now.getHours() * 60 + now.getMinutes();
+            const expectedSlots = Math.floor(elapsedMinutes / 5) + 1;
+            const receivedRows = rows.length;
+            state.todayReliability = expectedSlots > 0 ? Math.min(100, Math.round((receivedRows / expectedSlots) * 100)) : 0;
+            state.periodRowsCount = receivedRows;
+            
             if (data) {
                 state.periodData = [data];
                 state.periodSummary = data;
-                state.periodRowsCount = 1; // 1 jour pour aujourd'hui
             } else {
                 state.periodData = [];
                 state.periodSummary = null;
-                state.periodRowsCount = 0;
             }
         } else {
             const rows = await fetchIndicators(range.from, range.to);
@@ -803,13 +822,13 @@ async function loadPeriodData() {
     }
 }
 
-// Met à jour le badge avec le nombre de jours retournés / attendus
+// Met à jour le badge avec le nombre de jours retournés / attendus ou la fiabilité
 function updatePeriodBadge() {
     const badge = document.getElementById('periodBadge');
     const period = state.currentPeriod;
     
     if (period === 'today') {
-        badge.textContent = '';
+        badge.textContent = `Fiabilité ${state.todayReliability}%`;
         return;
     }
     

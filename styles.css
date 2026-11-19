@@ -402,38 +402,43 @@ body {
     color: var(--text-muted);
 }
 
-/* Summary Card */
+/* Summary Card - même style que latest-grid/latest-item */
 .summary-card {
     margin-top: var(--spacing-md);
-    background: var(--bg-input);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-md);
 }
 
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--spacing-sm);
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: var(--spacing-md);
 }
 
 .summary-item {
-    display: flex;
-    flex-direction: column;
-    padding: var(--spacing-sm);
-    background: rgba(0, 0, 0, 0.2);
-    border-radius: var(--radius-sm);
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    transition: all var(--transition-base);
+}
+
+.summary-item:hover {
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 0 2px var(--border-glow);
 }
 
 .summary-item .label {
     font-size: var(--font-size-xs);
     color: var(--text-muted);
-    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-xs);
+    display: block;
 }
 
 .summary-item .value {
-    font-size: var(--font-size-base);
-    font-weight: 600;
+    font-size: var(--font-size-xl);
+    font-weight: 700;
+    color: var(--text-primary);
 }
 
 /* ============================================
@@ -628,19 +633,6 @@ body {
     
     .summary-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: var(--spacing-xs);
-    }
-    
-    .summary-item {
-        padding: var(--spacing-xs) var(--spacing-sm);
-    }
-    
-    .summary-item .label {
-        font-size: 11px;
-    }
-    
-    .summary-item .value {
-        font-size: var(--font-size-sm);
     }
     
     .table-header, .table-row {
