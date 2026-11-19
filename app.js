@@ -17,7 +17,7 @@ const CFG = {
 
 // Colonnes à récupérer
 const COLS = encodeURIComponent(
-    '"DateTime","Temperature","Humidity","Baro Pressure","Wind Gust","UVI","Hourly Rain","Solar Radiation"'
+    '"DateTime","Temperature","Humidity","Baro Pressure","Wind Gust","UVI","Hourly Rain","Rain Rate","Solar Radiation"'
 );
 
 const IND_COLS = encodeURIComponent(
@@ -331,7 +331,8 @@ function processLatestData(row) {
         pressure: row["Baro Pressure"],
         windGust: row["Wind Gust"],
         uvi: row["UVI"],
-        hourlyRain: row["Hourly Rain"]
+        hourlyRain: row["Hourly Rain"],
+        rainRate: row["Rain Rate"]
     };
 }
 
@@ -477,7 +478,7 @@ function renderLatestData(data) {
     const items = [
         { label: 'Date', value: frDateTime(data.dateTime) },
         { label: 'Température', value: fmt(data.temperature, 1) + '°C' },
-        { label: 'Pluie (1h)', value: fmt(data.hourlyRain, 1) + ' mm' },
+        { label: 'Taux de pluie', value: fmt(data.rainRate, 1) + ' mm/h' },
         { label: 'Pression', value: fmt(data.pressure, 1) + ' hPa' },
         { label: 'Rafale', value: fmt(data.windGust, 1) + ' km/h' },
         { label: 'UV', value: fmt(data.uvi, 1) }
