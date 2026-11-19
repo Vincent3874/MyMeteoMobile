@@ -413,7 +413,7 @@ body {
 
 .summary-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--spacing-sm);
 }
 
@@ -624,6 +624,23 @@ body {
     
     .latest-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-xs);
+    }
+    
+    .summary-item {
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+    
+    .summary-item .label {
+        font-size: 11px;
+    }
+    
+    .summary-item .value {
+        font-size: var(--font-size-sm);
     }
     
     .table-header, .table-row {

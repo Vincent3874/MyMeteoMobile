@@ -31,7 +31,9 @@ let state = {
     latestData: null,
     periodData: null,
     availableYears: [],
-    isLoading: false
+    isLoading: false,
+    periodRowsCount: 0,
+    periodExpectedDays: 0
 };
 
 // Timer pour fermer automatiquement la modal après 5 secondes
@@ -585,16 +587,16 @@ function renderSummary(summary, period) {
         return;
     }
     
-    // Gestion des valeurs null/undefined dans le summary
+    // Gestion des valeurs null/undefined dans le summary - libellés courts pour mobile
     const items = [
-        { label: 'Température min', value: summary.tempMin !== null && summary.tempMin !== undefined ? fmt(summary.tempMin, 1) + '°C' : '—' },
-        { label: 'Température max', value: summary.tempMax !== null && summary.tempMax !== undefined ? fmt(summary.tempMax, 1) + '°C' : '—' },
-        { label: 'Température moy', value: summary.tempAvg !== null && summary.tempAvg !== undefined ? fmt(summary.tempAvg, 1) + '°C' : '—' },
-        { label: 'Cumul des précipitations', value: summary.rainTotal !== null && summary.rainTotal !== undefined ? fmt(summary.rainTotal, 1) + ' mm' : '—' },
-        { label: 'Rafale maximum', value: summary.windGustMax !== null && summary.windGustMax !== undefined ? fmt(summary.windGustMax, 1) + ' km/h' : '—' },
-        { label: 'UV Max', value: summary.uvIndexMax !== null && summary.uvIndexMax !== undefined ? fmt(summary.uvIndexMax, 1) : '—' },
-        { label: 'Pression Min', value: summary.pressureMin !== null && summary.pressureMin !== undefined ? fmt(summary.pressureMin, 1) + ' hPa' : '—' },
-        { label: 'Pression Max', value: summary.pressureMax !== null && summary.pressureMax !== undefined ? fmt(summary.pressureMax, 1) + ' hPa' : '—' }
+        { label: 'T° min', value: summary.tempMin !== null && summary.tempMin !== undefined ? fmt(summary.tempMin, 1) + '°C' : '—' },
+        { label: 'T° max', value: summary.tempMax !== null && summary.tempMax !== undefined ? fmt(summary.tempMax, 1) + '°C' : '—' },
+        { label: 'T° moy', value: summary.tempAvg !== null && summary.tempAvg !== undefined ? fmt(summary.tempAvg, 1) + '°C' : '—' },
+        { label: 'Précipitations', value: summary.rainTotal !== null && summary.rainTotal !== undefined ? fmt(summary.rainTotal, 1) + ' mm' : '—' },
+        { label: 'Rafale max', value: summary.windGustMax !== null && summary.windGustMax !== undefined ? fmt(summary.windGustMax, 1) + ' km/h' : '—' },
+        { label: 'UV max', value: summary.uvIndexMax !== null && summary.uvIndexMax !== undefined ? fmt(summary.uvIndexMax, 1) : '—' },
+        { label: 'Press. min', value: summary.pressureMin !== null && summary.pressureMin !== undefined ? fmt(summary.pressureMin, 1) + ' hPa' : '—' },
+        { label: 'Press. max', value: summary.pressureMax !== null && summary.pressureMax !== undefined ? fmt(summary.pressureMax, 1) + ' hPa' : '—' }
     ];
     
     container.innerHTML = items.map(item => `
@@ -653,7 +655,7 @@ function selectPeriod(period) {
     };
     
     document.getElementById('periodTitle').textContent = titles[period] || period;
-    document.getElementById('periodBadge').textContent = period === 'today' ? 'Données brutes' : 'Indicateurs journaliers';
+    document.getElementById('periodBadge').textContent = '';
     
     loadData();
 }
@@ -737,10 +739,22 @@ async function loadPeriodData() {
     hideErrorModal();
     const period = state.currentPeriod;
     
+    // Calculer le nombre de jours attendus pour cette période
+    const expectedDays = {
+        today: 1,
+        yesterday: 1,
+        '7days': 7,
+        '30days': 30,
+        year: 365
+    };
+    state.periodExpectedDays = expectedDays[period] || 0;
+    
     if (period === 'year' && state.selectedYear) {
         const range = getYearRange(state.selectedYear);
         try {
             const rows = await fetchIndicators(range.from, range.to);
+            state.periodRowsCount = rows.length;
+            updatePeriodBadge();
             const data = processIndicatorsData(rows);
             const summary = aggregateIndicatorsData(data);
             
@@ -765,12 +779,15 @@ async function loadPeriodData() {
             if (data) {
                 state.periodData = [data];
                 state.periodSummary = data;
+                state.periodRowsCount = 1; // 1 jour pour aujourd'hui
             } else {
                 state.periodData = [];
                 state.periodSummary = null;
+                state.periodRowsCount = 0;
             }
         } else {
             const rows = await fetchIndicators(range.from, range.to);
+            state.periodRowsCount = rows.length;
             const data = processIndicatorsData(rows);
             const summary = aggregateIndicatorsData(data);
             
@@ -778,10 +795,30 @@ async function loadPeriodData() {
             state.periodSummary = summary;
         }
         
+        updatePeriodBadge();
         renderSummary(state.periodSummary, period);
         
     } catch (err) {
         showError('Impossible de charger les données pour cette période : ' + err.message);
+    }
+}
+
+// Met à jour le badge avec le nombre de jours retournés / attendus
+function updatePeriodBadge() {
+    const badge = document.getElementById('periodBadge');
+    const period = state.currentPeriod;
+    
+    if (period === 'today') {
+        badge.textContent = '';
+        return;
+    }
+    
+    if (state.periodExpectedDays > 1) {
+        badge.textContent = `${state.periodRowsCount}/${state.periodExpectedDays} jours`;
+    } else if (period === 'yesterday') {
+        badge.textContent = state.periodRowsCount > 0 ? '1/1 jour' : '0/1 jour';
+    } else {
+        badge.textContent = '';
     }
 }
 
