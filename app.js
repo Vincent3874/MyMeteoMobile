@@ -357,6 +357,42 @@ function processIndicatorsData(rows) {
     return result;
 }
 
+// Cumul journalier des précipitations à partir des données brutes MyMeteoData.
+// "Hourly Rain" est un compteur cumulatif remis à zéro à chaque heure pleine.
+// Règle : pluie de l'heure X = MAX(échantillon Xh55, échantillon (X+1)h00).
+// Les échantillons Xh00 (reliquat heure X-1) et Xh05 (début heure X) sont ignorés.
+// DateTime est tronqué à la minute pour neutraliser d'éventuelles secondes.
+function computeDailyRainTotal(rows) {
+    if (!rows || rows.length === 0) return null;
+
+    const rainMap = {};
+    let day = null;
+    for (const row of rows) {
+        const dt = row["DateTime"];
+        if (!dt) continue;
+        if (!day) day = dt.slice(0, 10);
+        const hr = row["Hourly Rain"];
+        if (hr === null || hr === undefined || isNaN(Number(hr))) continue;
+        const t = dt.slice(0, 16).replace("T", " "); // "YYYY-MM-DD HH:MM"
+        rainMap[t] = Number(hr);
+    }
+    if (!day) return null;
+
+    let total = 0;
+    for (let h = 0; h < 24; h++) {
+        const hh = String(h).padStart(2, "0");
+        const v55 = rainMap[day + " " + hh + ":55"];
+        // v60 = (X+1)h00 ; pour h=23 ce serait le lendemain, hors plage du jour
+        let v60;
+        if (h < 23) {
+            const nextH = String(h + 1).padStart(2, "0");
+            v60 = rainMap[day + " " + nextH + ":00"];
+        }
+        total += Math.max(v55 !== undefined ? v55 : 0, v60 !== undefined ? v60 : 0);
+    }
+    return total > 0 ? Math.round(total * 10) / 10 : null;
+}
+
 function processRawDataForToday(rows) {
     if (!rows || rows.length === 0) return null;
     
@@ -364,7 +400,6 @@ function processRawDataForToday(rows) {
     let tempMax = -Infinity;
     let tempSum = 0;
     let tempCount = 0;
-    let rainTotal = 0;
     let pressureMin = Infinity;
     let pressureMax = -Infinity;
     let pressureSum = 0;
@@ -388,7 +423,6 @@ function processRawDataForToday(rows) {
         }
         
         if (!isNaN(rain)) {
-            rainTotal += rain;
             lastRain = rain;
         }
         
@@ -413,7 +447,7 @@ function processRawDataForToday(rows) {
         tempMin: tempMin === Infinity ? null : tempMin,
         tempAvg: tempCount > 0 ? tempSum / tempCount : null,
         tempMax: tempMax === -Infinity ? null : tempMax,
-        rainTotal: rainTotal || null,
+        rainTotal: computeDailyRainTotal(rows),
         hourlyRain: lastRain || null,
         pressureMin: pressureMin === Infinity ? null : pressureMin,
         pressureMax: pressureMax === -Infinity ? null : pressureMax,
