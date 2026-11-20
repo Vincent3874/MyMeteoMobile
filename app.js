@@ -30,11 +30,11 @@ let state = {
     selectedYear: null,
     latestData: null,
     periodData: null,
-    availableYears: [],
     isLoading: false,
     periodRowsCount: 0,
     periodExpectedDays: 0,
-    todayReliability: 0
+    todayReliability: 0,
+    periodAvgReliability: 0
 };
 
 // Timer pour fermer automatiquement la modal après 5 secondes
@@ -215,16 +215,6 @@ async function fetchIndicators(from, to = null) {
     }
 }
 
-// Bornes min/max des années depuis DailyIndicators (permet de purger MyMeteoData)
-async function fetchOneDateTime(order) {
-    const url = CFG.url + "/rest/v1/" + CFG.indicatorsTable +
-        "?select=date" +
-        '&order=date.' + order + "&limit=1";
-
-    const rows = await fetchJSON(url, 'fetchOneDateTime');
-    return rows.length ? rows[0].date : null;
-}
-
 // Récupère la dernière date disponible dans DailyIndicators
 async function getLastIndicatorDate() {
     const url = CFG.url + "/rest/v1/DailyIndicators?select=date&order=date.desc&limit=1";
@@ -316,6 +306,21 @@ async function getPeriodRange(period) {
 
 function getYearRange(year) {
     return { from: year + "-01-01", to: (year + 1) + "-01-01", source: 'indicators' };
+}
+
+// Nombre de jours écoulés dans l'année donnée (jusqu'à aujourd'hui si c'est l'année en cours)
+function daysElapsedInYear(year) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    if (year < currentYear) {
+        // Année passée : 365 ou 366
+        return (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? 366 : 365;
+    }
+    if (year > currentYear) return 0;
+    // Année en cours : du 1er janvier à aujourd'hui
+    const start = new Date(year, 0, 1);
+    const diffMs = now - start;
+    return Math.floor(diffMs / 86400000) + 1;
 }
 
 // ------------------------------------------------------------------
@@ -498,6 +503,22 @@ function aggregateIndicatorsData(rows) {
     };
 }
 
+// Calcule la moyenne de fiabilité à partir des lignes d'indicateurs journaliers
+function computeAvgReliability(rows) {
+    if (!rows || rows.length === 0) return 0;
+    let sum = 0;
+    let count = 0;
+    for (const row of rows) {
+        const r = Number(row.reliability);
+        if (!isNaN(r)) {
+            sum += r;
+            count++;
+        }
+    }
+    // reliability est stocké entre 0 et 1 dans DailyIndicators : on convertit en pourcentage
+    return count > 0 ? Math.round((sum / count) * 100) : 0;
+}
+
 // ------------------------------------------------------------------
 // Rendu des données
 // ------------------------------------------------------------------
@@ -628,7 +649,7 @@ function renderSummary(summary, period) {
             yesterday: 'Hier',
             '7days': '7 derniers jours',
             '30days': '30 derniers jours',
-            years: 'Années'
+            year: `Année ${state.selectedYear || ''}`
         };
         const label = periodLabels[period] || period;
         container.innerHTML = `<p class="no-data">Aucune donnée disponible pour ${label}</p>`;
@@ -658,28 +679,17 @@ function renderSummary(summary, period) {
     hideErrorModal();
 }
 
-function renderYears(years) {
-    const container = document.getElementById('yearsGrid');
-    
-    if (!years || years.length === 0) {
-        container.innerHTML = '<p class="no-data">Aucune année disponible</p>';
-        return;
-    }
-    
-    const filteredYears = years.filter(y => y !== 2022);
-    
-    container.innerHTML = filteredYears.map(year => `
-        <button class="year-btn" data-year="${year}" onclick="selectYear(${year})">
-            ${year}
-        </button>
-    `).join('');
-}
-
 // ------------------------------------------------------------------
 // Gestion des périodes
 // ------------------------------------------------------------------
 
 function selectPeriod(period) {
+    // "years" => directement l'année en cours, sans liste de sélection
+    if (period === 'years') {
+        period = 'year';
+        state.selectedYear = new Date().getFullYear();
+    }
+    
     state.currentPeriod = period;
     
     // Masquer la modal d'erreur au changement de période
@@ -687,56 +697,27 @@ function selectPeriod(period) {
     
     document.querySelectorAll('.period-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.period === period) {
+        // Le bouton "years" correspond à la période interne "year"
+        const btnPeriod = btn.dataset.period === 'years' ? 'year' : btn.dataset.period;
+        if (btnPeriod === period) {
             btn.classList.add('active');
         }
     });
     
     document.getElementById('dataSection').hidden = false;
-    document.getElementById('yearsSection').hidden = true;
     
     const titles = {
         today: 'Aujourd\'hui',
         yesterday: 'Hier',
         '7days': '7 derniers jours',
-        '30days': '30 derniers jours'
+        '30days': '30 derniers jours',
+        year: `Année ${state.selectedYear}`
     };
     
     document.getElementById('periodTitle').textContent = titles[period] || period;
     document.getElementById('periodBadge').textContent = '';
     
     loadData();
-}
-
-function selectYear(year) {
-    state.currentPeriod = 'year';
-    state.selectedYear = year;
-    
-    // Masquer la modal d'erreur
-    hideErrorModal();
-    
-    document.querySelectorAll('.year-btn').forEach(btn => {
-        btn.classList.remove('active');
-        if (parseInt(btn.dataset.year) === year) {
-            btn.classList.add('active');
-        }
-    });
-    
-    document.getElementById('dataSection').hidden = false;
-    document.getElementById('yearsSection').hidden = true;
-    
-    document.getElementById('periodTitle').textContent = `Année ${year}`;
-    document.getElementById('periodBadge').textContent = 'Indicateurs annuels';
-    
-    loadData();
-}
-
-function showYears() {
-    // Masquer la modal d'erreur
-    hideErrorModal();
-    
-    document.getElementById('dataSection').hidden = true;
-    document.getElementById('yearsSection').hidden = false;
 }
 
 // ------------------------------------------------------------------
@@ -754,35 +735,6 @@ async function loadLatest() {
     }
 }
 
-async function loadAvailableYears() {
-    hideErrorModal();
-    try {
-        const [minDate, maxDate] = await Promise.all([
-            fetchOneDateTime('asc'),
-            fetchOneDateTime('desc')
-        ]);
-        
-        if (!minDate || !maxDate) {
-            state.availableYears = [];
-            return;
-        }
-        
-        const minYear = parseInt(minDate.slice(0, 4));
-        const maxYear = parseInt(maxDate.slice(0, 4));
-        
-        state.availableYears = [];
-        for (let y = minYear; y <= maxYear; y++) {
-            state.availableYears.push(y);
-        }
-        
-        renderYears(state.availableYears);
-    } catch (err) {
-        console.error('Erreur loadAvailableYears:', err);
-        state.availableYears = [];
-        showError('Impossible de déterminer les années disponibles : ' + err.message);
-    }
-}
-
 async function loadPeriodData() {
     hideErrorModal();
     const period = state.currentPeriod;
@@ -793,7 +745,7 @@ async function loadPeriodData() {
         yesterday: 1,
         '7days': 7,
         '30days': 30,
-        year: 365
+        year: daysElapsedInYear(state.selectedYear || new Date().getFullYear())
     };
     state.periodExpectedDays = expectedDays[period] || 0;
     
@@ -802,6 +754,7 @@ async function loadPeriodData() {
         try {
             const rows = await fetchIndicators(range.from, range.to);
             state.periodRowsCount = rows.length;
+            state.periodAvgReliability = computeAvgReliability(rows);
             updatePeriodBadge();
             const data = processIndicatorsData(rows);
             const summary = aggregateIndicatorsData(data);
@@ -843,6 +796,7 @@ async function loadPeriodData() {
         } else {
             const rows = await fetchIndicators(range.from, range.to);
             state.periodRowsCount = rows.length;
+            state.periodAvgReliability = computeAvgReliability(rows);
             const data = processIndicatorsData(rows);
             const summary = aggregateIndicatorsData(data);
             
@@ -858,22 +812,15 @@ async function loadPeriodData() {
     }
 }
 
-// Met à jour le badge avec le nombre de jours retournés / attendus ou la fiabilité
+// Met à jour le badge avec le pourcentage de fiabilité de la période
 function updatePeriodBadge() {
     const badge = document.getElementById('periodBadge');
     const period = state.currentPeriod;
     
     if (period === 'today') {
         badge.textContent = `Fiabilité ${state.todayReliability}%`;
-        return;
-    }
-    
-    if (state.periodExpectedDays > 1) {
-        badge.textContent = `${state.periodRowsCount}/${state.periodExpectedDays} jours`;
-    } else if (period === 'yesterday') {
-        badge.textContent = state.periodRowsCount > 0 ? '1/1 jour' : '0/1 jour';
     } else {
-        badge.textContent = '';
+        badge.textContent = `Fiabilité ${state.periodAvgReliability}%`;
     }
 }
 
@@ -884,11 +831,7 @@ async function loadData() {
     hideErrorModal(); // Masquer la modal au début du chargement
     
     try {
-        if (state.currentPeriod === 'years') {
-            showYears();
-        } else {
-            await loadPeriodData();
-        }
+        await loadPeriodData();
         
         const now = new Date();
         document.getElementById('lastUpdate').textContent = `Mise à jour : ${frDateTime(now.toISOString())}`;
@@ -909,7 +852,6 @@ async function init() {
     hideErrorModal();
     
     try {
-        await loadAvailableYears();
         await loadLatest();
         
         state.currentPeriod = 'today';
@@ -923,11 +865,7 @@ async function init() {
 }
 
 function handlePeriodButtonClick(period) {
-    if (period === 'years') {
-        showYears();
-    } else {
-        selectPeriod(period);
-    }
+    selectPeriod(period);
 }
 
 function attachEventListeners() {
@@ -991,5 +929,4 @@ window.addEventListener('touchend', (e) => {
 
 // Exposer les fonctions pour les boutons inline
 window.selectPeriod = selectPeriod;
-window.selectYear = selectYear;
 window.hideErrorModal = hideErrorModal;
