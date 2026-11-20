@@ -215,13 +215,14 @@ async function fetchIndicators(from, to = null) {
     }
 }
 
+// Bornes min/max des années depuis DailyIndicators (permet de purger MyMeteoData)
 async function fetchOneDateTime(order) {
-    const url = CFG.url + "/rest/v1/" + CFG.table +
-        "?select=" + encodeURIComponent('"DateTime"') +
-        '&order="DateTime".' + order + "&limit=1";
-    
+    const url = CFG.url + "/rest/v1/" + CFG.indicatorsTable +
+        "?select=date" +
+        '&order=date.' + order + "&limit=1";
+
     const rows = await fetchJSON(url, 'fetchOneDateTime');
-    return rows.length ? rows[0]["DateTime"] : null;
+    return rows.length ? rows[0].date : null;
 }
 
 // Récupère la dernière date disponible dans DailyIndicators
