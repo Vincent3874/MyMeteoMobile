@@ -183,6 +183,198 @@ body {
 }
 
 /* ============================================
+   View Tabs (Indicateurs / Comparaison)
+   ============================================ */
+.view-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xs);
+    box-shadow: var(--shadow-sm);
+}
+
+.view-tab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    transition: all var(--transition-base);
+    min-height: 44px;
+}
+
+.view-tab:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.view-tab.active {
+    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-green));
+    color: var(--primary);
+    box-shadow: 0 0 16px rgba(0, 212, 255, 0.3);
+}
+
+.view-tab .tab-icon {
+    font-size: var(--font-size-lg);
+}
+
+.view-tab .tab-label {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: var(--font-size-sm);
+}
+
+/* ============================================
+   Comparison Section (Analyse annuelle)
+   ============================================ */
+.comparison-section {
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-md);
+}
+
+.comparison-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+    box-shadow: var(--shadow-sm);
+}
+
+.comparison-controls .btn-primary {
+    width: auto;
+    margin-top: 0;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+}
+
+.comparison-status {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    flex: 1;
+}
+
+.comparison-status.error {
+    color: var(--accent-red);
+}
+
+/* Carte par année */
+.year-card {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-md);
+    overflow: hidden;
+}
+
+.year-card-header {
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: rgba(0, 212, 255, 0.08);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 700;
+    font-size: var(--font-size-base);
+    color: var(--accent-cyan);
+}
+
+.year-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--border-color);
+}
+
+.year-stat {
+    background: var(--bg-input);
+    padding: var(--spacing-sm) var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.year-stat .label {
+    font-size: var(--font-size-xs);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.year-stat .value {
+    font-size: var(--font-size-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* Record max (chaud) */
+.year-stat.hl-max {
+    background: rgba(255, 107, 53, 0.12);
+    box-shadow: inset 3px 0 0 var(--accent-orange);
+}
+
+.year-stat.hl-max .value {
+    color: var(--accent-orange);
+}
+
+/* Record min (froid) */
+.year-stat.hl-min {
+    background: rgba(0, 212, 255, 0.12);
+    box-shadow: inset 3px 0 0 var(--accent-cyan);
+}
+
+.year-stat.hl-min .value {
+    color: var(--accent-cyan);
+}
+
+/* Légende */
+.comparison-legend {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-xs);
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-xl);
+}
+
+.comparison-legend .sw {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    margin-right: var(--spacing-xs);
+    vertical-align: middle;
+}
+
+.comparison-legend .sw.max {
+    background: var(--accent-orange);
+}
+
+.comparison-legend .sw.min {
+    background: var(--accent-cyan);
+}
+
+/* ============================================
    Sections
    ============================================ */
 .section {
