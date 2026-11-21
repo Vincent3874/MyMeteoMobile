@@ -56,6 +56,14 @@ function isoDay(d) {
     return d.toISOString().slice(0, 10);
 }
 
+// Date du jour en heure locale (corrige le décalage UTC de toISOString)
+function isoDayLocal(d) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 function frDate(iso) {
     if (!iso) return "—";
     return iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
@@ -232,28 +240,24 @@ async function getLastIndicatorDate() {
 // ------------------------------------------------------------------
 
 function getToday() {
-    return isoDay(new Date());
+    return isoDayLocal(new Date());
 }
 
 // Date du jour en heure locale (pour la fiabilité)
 function getTodayLocal() {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return isoDayLocal(new Date());
 }
 
 function getYesterday() {
     const d = new Date();
-    d.setUTCDate(d.getUTCDate() - 1);
-    return isoDay(d);
+    d.setDate(d.getDate() - 1);
+    return isoDayLocal(d);
 }
 
 function getDateMinusDays(days) {
     const d = new Date();
-    d.setUTCDate(d.getUTCDate() - days);
-    return isoDay(d);
+    d.setDate(d.getDate() - days);
+    return isoDayLocal(d);
 }
 
 // Soustraire des jours à partir d'une date ISO
@@ -834,7 +838,9 @@ async function loadData() {
         await loadPeriodData();
         
         const now = new Date();
-        document.getElementById('lastUpdate').textContent = `Mise à jour : ${frDateTime(now.toISOString())}`;
+        const pad = (n) => String(n).padStart(2, '0');
+        const localIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        document.getElementById('lastUpdate').textContent = `Mise à jour : ${frDateTime(localIso)}`;
         
     } catch (err) {
         showError('Erreur lors du chargement : ' + err.message);
