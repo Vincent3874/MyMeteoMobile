@@ -1118,23 +1118,13 @@ function renderComparison(stats) {
 // État de chargement de la comparaison
 let comparisonLoaded = false;
 
-async function loadComparisonData(force) {
-    if (comparisonLoaded && !force) return;
+async function loadComparisonData() {
+    if (comparisonLoaded) return;
 
-    const statusEl = document.getElementById("comparisonStatus");
-    const btn = document.getElementById("refreshComparisonBtn");
-    const setStatus = (msg, isErr) => {
-        if (!statusEl) return;
-        statusEl.textContent = msg;
-        statusEl.className = "comparison-status" + (isErr ? " error" : "");
-    };
-
-    if (btn) btn.disabled = true;
     showLoading();
     hideErrorModal();
 
     try {
-        setStatus("Détermination des années disponibles…");
         const today = isoDayLocal(new Date());
 
         const [dMin, dMax] = await Promise.all([
@@ -1152,9 +1142,6 @@ async function loadComparisonData(force) {
         const years = [];
         for (let y = yMin; y <= yMax; y++) years.push(y);
 
-        let done = 0;
-        setStatus(`Chargement de l'analyse… 0/${years.length} années`);
-
         const results = await Promise.all(years.map(async (y) => {
             const yearStart = y + "-01-01";
             const yearEnd = (y + 1) + "-01-01";
@@ -1165,23 +1152,15 @@ async function loadComparisonData(force) {
             const pInd = indFrom ? fetchIndicators(indFrom, indTo) : Promise.resolve([]);
             const pRaw = hasRaw ? fetchRows(rawFrom, yearEnd) : Promise.resolve([]);
             const [indRows, rawRows] = await Promise.all([pInd, pRaw]);
-            done++;
-            setStatus(`Chargement de l'analyse… ${done}/${years.length} années`);
             return { year: y, agg: buildAgg(indRows, rawRows, yearStart, yearEnd) };
         }));
 
         const stats = results.map(r => computeYearStatsFromAgg(r.year, r.agg));
         renderComparison(stats);
         comparisonLoaded = true;
-
-        const first = stats.length ? stats[0].year : "—";
-        const last = stats.length ? stats[stats.length - 1].year : "—";
-        setStatus(`Analyse terminée — ${stats.length} année(s), de ${first} à ${last}.`);
     } catch (err) {
-        setStatus("Échec : " + err.message, true);
         showError("Impossible de charger l'analyse annuelle : " + err.message);
     } finally {
-        if (btn) btn.disabled = false;
         hideLoading();
     }
 }
@@ -1440,4 +1419,3 @@ window.addEventListener('touchend', (e) => {
 window.selectPeriod = selectPeriod;
 window.hideErrorModal = hideErrorModal;
 window.switchView = switchView;
-window.loadComparisonData = loadComparisonData;

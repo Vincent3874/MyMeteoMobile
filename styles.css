@@ -247,36 +247,6 @@ body {
     box-shadow: var(--shadow-md);
 }
 
-.comparison-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-    background: var(--bg-card);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: var(--spacing-md) var(--spacing-lg);
-    box-shadow: var(--shadow-sm);
-}
-
-.comparison-controls .btn-primary {
-    width: auto;
-    margin-top: 0;
-    white-space: nowrap;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-}
-
-.comparison-status {
-    font-size: var(--font-size-xs);
-    color: var(--text-muted);
-    flex: 1;
-}
-
-.comparison-status.error {
-    color: var(--accent-red);
-}
-
 /* Carte par année */
 .year-card {
     background: var(--bg-input);
@@ -318,7 +288,7 @@ body {
 }
 
 .year-stat .value {
-    font-size: var(--font-size-lg);
+    font-size: var(--font-size-xl);
     font-weight: 700;
     color: var(--text-primary);
 }
